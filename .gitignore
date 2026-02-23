@@ -1,0 +1,36 @@
+# Compiled files
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.out
+
+# Build directories
+build/
+Debug/
+Release/
+
+# IDE files
+*.uvguix*
+*.uvoptx
+*.uvprojx
+*.mxproject
+*.launch
+*.settings/
+*.project
+*.cproject
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*.swo
+*~
+
+# GDB history
+.gdb_history
+
+# Renode files
+*.resc~
+*.repl~

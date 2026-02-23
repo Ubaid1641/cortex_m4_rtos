@@ -1,0 +1,16 @@
+mach create "my-rtos"
+machine LoadPlatformDescription @platforms/boards/stm32f4_discovery.repl
+
+
+
+
+
+sysbus LoadELF @rtos-day1.elf
+
+showAnalyzer sysbus.usart2
+
+start
+
+
+
+
