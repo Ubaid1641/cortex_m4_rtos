@@ -1,8 +1,9 @@
 
 #include "task1.h"
+#include "mutex.h"
 #include <stdint.h>
 
-#define MAX_TASKS 3
+#define MAX_TASKS 4
 static TCB_t* task_list[MAX_TASKS];
 uint8_t count = 0;
 volatile uint32_t system_ticks = 0;
@@ -41,17 +42,20 @@ volatile uint32_t system_ticks = 0;
 #define RCC_AHB1ENR_GPIOAEN  (1 << 0)
 #define RCC_AHB1ENR_GPIODEN  (1 << 3)
 #define RCC_APB1ENR_USART2EN (1 << 17)
-
-
+void print_string(const char* str);
+void print_num(uint32_t num);
 TCB_t* volatile current_task = 0;
 volatile uint32_t tsk_1 = 0;
 volatile uint32_t tsk_2 = 0;
+volatile uint32_t tsk_3 = 0;
 volatile uint32_t idl_tsk = 0;
  uint32_t task1_stack[TASK_STACK_SIZE];
  uint32_t task2_stack[TASK_STACK_SIZE];
+ uint32_t task3_stack[TASK_STACK_SIZE];
 uint32_t idl_tsk_stack[TASK_STACK_SIZE];
  TCB_t task1_tcb;
  TCB_t task2_tcb;
+TCB_t task3_tcb;
  TCB_t idl_tsk_tcb;
 void rtos_sleep(uint32_t ms){
     if(current_task){
@@ -65,21 +69,81 @@ void rtos_register_task(TCB_t* tcb){
         task_list[count++] = tcb;
     }
 }
+/*=======================================================================*/
+
+
+
+/*=======================================================================*/
+
+
+mutex_t uart_mutex;
 
 void task1(void) {
-    while (1) {  /* ← Tasks must loop forever */
-        USART2_DR = '1';
-        while (!(USART2_SR & (1 << 7)));
-        rtos_sleep(100);
+    
+        uint32_t loop_count=0;
+            while (1) {
+        loop_count++;
+        print_string("\r\n[Task1 HIGH] Attempting lock...\r\n");
+        
+        mutex_lock(&uart_mutex);
+        
+        print_string("[Task1 HIGH] GOT LOCK! ");
+        print_num(loop_count);
+        print_string("\r\n");
+        
+        // Hold lock briefly
+        
+        
+        mutex_unlock(&uart_mutex);
+        
+        print_string("[Task1 HIGH] Released lock\r\n");
+        rtos_sleep(10000);
     }
+    //     mutex_lock(&uart_mutex);
+    //     print_string("  task2 ------> locked  ");
+    //     // Critical section - safe UART access
+    //     //USART2_DR = '1';
+    //     //while (!(USART2_SR & (1 << 7)));
+        
+    //     mutex_unlock(&uart_mutex);
+    //     print_string("  task1 ------> locked  ");
+    //     rtos_sleep(1000);
+    // }
 }
 
+
 void task2(void) {
+    uint32_t loop_count = 0;
     while (1) {
-        USART2_DR = '2';
-        while (!(USART2_SR & (1 << 7)));
-        rtos_sleep(50);
+        loop_count++;
+        print_string("\r\n[Task2 LOW] Attempting lock...\r\n");
+        
+        mutex_lock(&uart_mutex);
+        
+        print_string("[Task2 LOW] GOT LOCK! ");
+        print_num(loop_count);
+        print_string(" (holding long...)\r\n");
+        
+        
+        
+        
+        mutex_unlock(&uart_mutex);
+        
+        print_string("[Task2 LOW] Released lock\r\n");
+        rtos_sleep(5000);
     }
+    // while (1) {
+    //     mutex_lock(&uart_mutex);
+        
+    //     // Critical section - safe UART access
+    //     //USART2_DR = '2';
+    //     print_string("  task1 ------> locked  ");
+    //     //while (!(USART2_SR & (1 << 7)));
+        
+    //     mutex_unlock(&uart_mutex);
+    //     print_string("  task1 ------> unlocked    ");
+    //     rtos_sleep(500);
+    // }
 }
 void idle_task(void){
     while(1){
@@ -131,7 +195,10 @@ void SysTick_Init(void) {
 
     STK_CSR = STK_CSR_CLKSOURCE | STK_CSR_TICKINT | STK_CSR_ENABLE;
 }
-
+void scheduler_yield(void) {
+    // Trigger PendSV to switch tasks
+    *((volatile uint32_t*)0xE000ED04) |= (1 << 28);  // Set PendSV bit
+}
 
 void PendSV_Handler_c(void) __attribute__((used));
 void PendSV_Handler_c(void) {
@@ -217,9 +284,9 @@ int main(void) {
     //Systick_Handler();
     //print("Day 1: RTOS journey begins\n");
     
-    task_stack_init(&task1_tcb, task1, &task1_stack[TASK_STACK_SIZE]);
-    task_stack_init(&task2_tcb, task2, &task2_stack[TASK_STACK_SIZE]);
-    task_stack_init(&idl_tsk_tcb,idle_task,&idl_tsk_stack[TASK_STACK_SIZE]);
+    task_stack_init(&task1_tcb, task1, &task1_stack[TASK_STACK_SIZE],2);
+    task_stack_init(&task2_tcb, task2, &task2_stack[TASK_STACK_SIZE],1);
+    task_stack_init(&idl_tsk_tcb,idle_task,&idl_tsk_stack[TASK_STACK_SIZE],0);
     rtos_register_task(&task1_tcb);
     rtos_register_task(&task2_tcb);
     rtos_register_task(&idl_tsk_tcb);
@@ -228,5 +295,32 @@ int main(void) {
       //__asm__("bkpt 0x01");
     while (1) {
         __asm__ volatile ("wfi");
+    }
+}
+void print_string(const char* str) {
+    while (*str) {
+        USART2_DR = *str++;
+        while (!(USART2_SR & (1 << 7)));  // Wait for TX complete
+    }
+}
+
+void print_num(uint32_t num) {
+    char buf[16];
+    int i = 0;
+    
+    // Convert number to string (simple decimal)
+    if (num == 0) {
+        print_string("0");
+        return;
+    }
+    
+    while (num > 0) {
+        buf[i++] = '0' + (num % 10);
+        num /= 10;
+    }
+    
+    while (i > 0) {
+        USART2_DR = buf[--i];
+        while (!(USART2_SR & (1 << 7)));
     }
 }
