@@ -1,19 +1,19 @@
 #include "mutex.h"
 #include "task1.h"
 
-// Simple critical section
+
 static void critical_enter(void) {
-    __asm volatile ("cpsid i" : : : "memory");  // Disable interrupts
-    __asm volatile ("dsb" : : : "memory");      // Data sync barrier
-    __asm volatile ("isb" : : : "memory");      // Instruction sync barrier
+    __asm volatile ("cpsid i" : : : "memory");  
+    __asm volatile ("dsb" : : : "memory");      
+    __asm volatile ("isb" : : : "memory");      
 }
 
 static void critical_exit(void) {
-    __asm volatile ("isb" : : : "memory");      // Instruction sync barrier
-    __asm volatile ("cpsie i" : : : "memory");  // Enable interrupts
+    __asm volatile ("isb" : : : "memory");      
+    __asm volatile ("cpsie i" : : : "memory");  
 }
 
-// Add task to end of wait list
+
 static void mutex_add_waiter(mutex_t* m, TCB_t* task) {
     task->next = 0;
     
@@ -28,7 +28,7 @@ static void mutex_add_waiter(mutex_t* m, TCB_t* task) {
     }
 }
 
-// Remove first task from wait list
+
 static TCB_t* mutex_remove_waiter(mutex_t* m) {
     if (m->wait_list_head == 0) {
         return 0;

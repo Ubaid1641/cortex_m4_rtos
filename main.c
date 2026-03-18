@@ -13,7 +13,7 @@ volatile uint32_t system_ticks = 0;
 #define GPIOD_BASE      0x40020C00
 #define USART2_BASE     0x40004400
 
-/*Systick Reisters*/
+
 #define STK_CSR     (*(volatile uint32_t *)0xE000E010)  /* Control & Status */
 #define STK_RVR     (*(volatile uint32_t *)0xE000E014)  /* Reload Value */
 #define STK_CVR     (*(volatile uint32_t *)0xE000E018)  /* Current Value */
@@ -37,7 +37,7 @@ volatile uint32_t system_ticks = 0;
 #define USART2_SR       (*(volatile uint32_t*)(USART2_BASE + 0x00))
 #define USART2_DR       (*(volatile uint32_t*)(USART2_BASE + 0x04))
 #define USART2_BRR      (*(volatile uint32_t*)(USART2_BASE + 0x08))
-#define USART2_CR1      (*(volatile uint32_t*)(USART2_BASE + 0x0C)) /* Offset 0x0C is CR1 on some, check ref */
+#define USART2_CR1      (*(volatile uint32_t*)(USART2_BASE + 0x0C)) 
 
 #define RCC_AHB1ENR_GPIOAEN  (1 << 0)
 #define RCC_AHB1ENR_GPIODEN  (1 << 3)
@@ -91,7 +91,7 @@ void task1(void) {
         print_num(loop_count);
         print_string("\r\n");
         
-        // Hold lock briefly
+        
         
         
         mutex_unlock(&uart_mutex);
@@ -177,7 +177,7 @@ static void system_init(void) {
 
 
 static void uart_putc(char c) {
-    /* Wait until Transmit Data Register Empty (TXE = bit 7) */
+
     while (!(USART2_SR & (1 << 7))); 
     USART2_DR = c;
 }
@@ -196,7 +196,7 @@ void SysTick_Init(void) {
     STK_CSR = STK_CSR_CLKSOURCE | STK_CSR_TICKINT | STK_CSR_ENABLE;
 }
 void scheduler_yield(void) {
-    // Trigger PendSV to switch tasks
+    
     *((volatile uint32_t*)0xE000ED04) |= (1 << 28);  // Set PendSV bit
 }
 
@@ -211,31 +211,31 @@ void PendSV_Handler_c(void) {
         : : "r" (&current_task->sp) : "r0", "memory"
     );
     
-    /* 2. Find next READY task (simple round-robin for now) */
+    
     TCB_t *next_task = 0;
     
-    /* Try each registered task */
+   
     for (int i = 0; i < count; i++) {
         TCB_t *candidate = task_list[i];
         
-        /* Skip if not current task and not ready */
+        
         if (candidate == current_task) continue;
         if (candidate->state != READY) continue;
         
-        /* Found a ready task */
+       
         next_task = candidate;
         break;
     }
     
-    /* If no ready task found, stay on current (it might be waking now) */
+    
     if (next_task == 0) {
         next_task = current_task;
     }
     
-    /* Update current_task pointer */
+    
     current_task = next_task;
     
-    /* 3. Load next task's PSP */
+   
     __asm__ volatile (
         "LDR r0, [%0]         \n"
         "MSR PSP, r0          \n"
@@ -243,7 +243,7 @@ void PendSV_Handler_c(void) {
         : : "r" (&current_task->sp) : "r0", "memory"
     );
     
-    /* 4. Return: hardware restores registers from new PSP */
+   
 }
 __attribute__((naked)) void start_scheduler(TCB_t *first_task) {
     __asm__ volatile (
@@ -270,14 +270,14 @@ void SysTick_Handler(void) {
         }
     }
     
-    /* Existing: Trigger context switch every N ticks */
+    
     if (system_ticks % 10 == 0) {
-        *((volatile uint32_t*)0xE000ED04) |= (1 << 28);  /* PendSV */
+        *((volatile uint32_t*)0xE000ED04) |= (1 << 28);  
     }
 
 }
 //volatile uint32_t debug_heartbeat = 0;
-/* --- Entry --- */
+
 int main(void) {
     system_init();
     SysTick_Init();
@@ -300,7 +300,7 @@ int main(void) {
 void print_string(const char* str) {
     while (*str) {
         USART2_DR = *str++;
-        while (!(USART2_SR & (1 << 7)));  // Wait for TX complete
+        while (!(USART2_SR & (1 << 7)));  
     }
 }
 
@@ -308,7 +308,7 @@ void print_num(uint32_t num) {
     char buf[16];
     int i = 0;
     
-    // Convert number to string (simple decimal)
+    // Convert number to string 
     if (num == 0) {
         print_string("0");
         return;
