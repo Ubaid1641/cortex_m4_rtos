@@ -1,7 +1,7 @@
 #include "task1.h"
 #include "mutex.h"
 #include <stdint.h>
-
+#include "queue.h"
 #define MAX_TASKS 4
 static TCB_t* task_list[MAX_TASKS];
 uint8_t count = 0;
@@ -47,14 +47,15 @@ uint32_t task1_stack[TASK_STACK_SIZE];
 uint32_t task2_stack[TASK_STACK_SIZE];
 uint32_t task3_stack[TASK_STACK_SIZE];
 uint32_t idl_tsk_stack[TASK_STACK_SIZE];
+uint32_t logger_task_stack[TASK_STACK_SIZE];
 
 TCB_t task1_tcb;
 TCB_t task2_tcb;
 TCB_t task3_tcb;
 TCB_t idl_tsk_tcb;
-
+TCB_t logger_task_tcb;
 mutex_t uart_mutex;
-
+queue_t queue_local;
 void rtos_sleep(uint32_t ms){
     if(current_task){
         current_task->state = BLOCKED;
@@ -70,37 +71,43 @@ void rtos_register_task(TCB_t* tcb){
 }
 
 void task1(void) {
-    uint32_t loop_count=0;
-    
     while (1) {
-        loop_count++;
-        print_string("\r\n[Task1 HIGH] Attempting lock...\r\n");
-        mutex_lock(&uart_mutex);
-        print_string("[Task1 HIGH] GOT LOCK! ");
-        print_num(loop_count);
-        print_string("\r\n");
-        mutex_unlock(&uart_mutex);
-        print_string("[Task1 HIGH] Released lock\r\n");
-        rtos_sleep(10000);
+        
+        queue_send(&queue_local, 123);
+        
+      
+        
+        rtos_sleep(1000); 
     }
-    
 }
 
 void task2(void) {
-    uint32_t loop_count = 0;
     while (1) {
-        loop_count++;
-        print_string("\r\n[Task2 LOW] Attempting lock...\r\n");
-        mutex_lock(&uart_mutex);
-        print_string("[Task2 LOW] GOT LOCK! ");
-        print_num(loop_count);
-        print_string(" (holding long...)\r\n");
-        mutex_unlock(&uart_mutex);
-        print_string("[Task2 LOW] Released lock\r\n");
-        rtos_sleep(5000);
+        
+        queue_send(&queue_local, 555);
+        
+        
+        
+        rtos_sleep(5000); 
     }
 }
-
+void logger_task(void) {
+    uint32_t data;
+    int status;
+    
+    while (1) {
+        status = queue_receive(&queue_local, &data);
+        
+        if (status == 0) {
+            
+            print_string("\r\n[LOG] Data: ");
+            print_num(data);
+        } else {
+           
+            rtos_sleep(10); 
+        }
+    }
+}
 void idle_task(void){
     while(1){
         __asm__ volatile ("wfi");
@@ -131,7 +138,12 @@ void SysTick_Init(void) {
     STK_CVR = 0;
     STK_CSR = STK_CSR_CLKSOURCE | STK_CSR_TICKINT | STK_CSR_ENABLE;
 }
-
+void PrintHardFaultInfo(uint32_t *stack_frame) {
+    uint32_t pc = stack_frame[6];  /* PC is at offset 24 (6 words) */
+    print_string("\r\n[HARDFAULT] PC: ");
+    print_num(pc);
+    print_string("\r\n");
+}
 void scheduler_yield(void) {
     SCB_ICSR |= (1 << 28);
 }
@@ -233,16 +245,17 @@ void SysTick_Handler_c(void) {
 int main(void) {
     system_init();
     SysTick_Init();
+    queue_init(&queue_local);
+    //mutex_init(&uart_mutex, 2);
 
-    mutex_init(&uart_mutex, 1);
-
-    task_stack_init(&task1_tcb, task1, &task1_stack[TASK_STACK_SIZE], 2);
-    task_stack_init(&task2_tcb, task2, &task2_stack[TASK_STACK_SIZE], 1);
+    task_stack_init(&task1_tcb, task1, &task1_stack[TASK_STACK_SIZE], 3);
+    task_stack_init(&task2_tcb, task2, &task2_stack[TASK_STACK_SIZE], 2);
     task_stack_init(&idl_tsk_tcb, idle_task, &idl_tsk_stack[TASK_STACK_SIZE], 0);
-
+    task_stack_init(&logger_task_tcb, logger_task, &logger_task_stack[TASK_STACK_SIZE], 1);
     rtos_register_task(&task1_tcb);
     rtos_register_task(&task2_tcb);
     rtos_register_task(&idl_tsk_tcb);
+    rtos_register_task(&logger_task_tcb);
 
     current_task = &task1_tcb;
     start_scheduler(&task1_tcb);

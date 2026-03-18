@@ -112,8 +112,19 @@ NMI_Handler:
 
 .thumb_func
 HardFault_Handler:
+    MRS r0, MSP           
+    B HardFault_Handler_C 
+
+.thumb_func
+HardFault_Handler_C:
+
+    LDR r1, [r0, #24]     
     
-    b HardFault_Handler
+    BL PrintHardFaultInfo
+    B HardFault_Loop
+
+HardFault_Loop:
+    B HardFault_Loop
 
 .thumb_func
 MemManage_Handler:
