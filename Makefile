@@ -6,7 +6,7 @@ CFLAGS = -mcpu=cortex-m4 -mthumb -fno-builtin -nostdlib -g -O0 -I.
 LDFLAGS = -T linker.ld -Wl,--gc-sections
 
 TARGET = rtos-day1
-SRCS = startup.S main.c task.c mutex.c queue.c
+SRCS = startup.S main.c task.c mutex.c queue.c protocol.c
 OBJS = $(SRCS:.c=.o)
 
 all: $(TARGET).elf

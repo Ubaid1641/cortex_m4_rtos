@@ -2,6 +2,7 @@
 #include "mutex.h"
 #include <stdint.h>
 #include "queue.h"
+#include "protocol.h"
 #define MAX_TASKS 4
 static TCB_t* task_list[MAX_TASKS];
 uint8_t count = 0;
@@ -40,6 +41,13 @@ volatile uint32_t system_ticks = 0;
 
 void print_string(const char* str);
 void print_num(uint32_t num);
+
+/**
+ * @brief Send raw binary data over UART (binary-safe, no string functions)
+ * @param data Pointer to data buffer
+ * @param len Number of bytes to send
+ */
+void uart_send_bytes(uint8_t* data, int len);
 
 TCB_t* volatile current_task = 0;
 
@@ -94,14 +102,18 @@ void task2(void) {
 void logger_task(void) {
     uint32_t data;
     int status;
+    uint8_t tx_buffer[PROTOCOL_MIN_PACKET_SIZE + 4]; /* Header + Type + Len + Payload(4) + CRC */
+    uint8_t packet_len;
     
     while (1) {
         status = queue_receive(&queue_local, &data);
         
         if (status == 0) {
+            /* Encode the sensor data into binary protocol packet */
+            packet_len = protocol_encode(tx_buffer, PROTOCOL_TYPE_SENSOR_DATA, data);
             
-            print_string("\r\n[LOG] Data: ");
-            print_num(data);
+            /* Send raw binary packet over UART */
+            uart_send_bytes(tx_buffer, packet_len);
         } else {
            
             rtos_sleep(10); 
@@ -286,5 +298,18 @@ void print_num(uint32_t num) {
     while (i > 0) {
         USART2_DR = buf[--i];
         while (!(USART2_SR & (1 << 7)));
+    }
+}
+
+/**
+ * @brief Send raw binary data over UART (binary-safe, no string functions)
+ * @param data Pointer to data buffer
+ * @param len Number of bytes to send
+ */
+void uart_send_bytes(uint8_t* data, int len) {
+    int i;
+    for (i = 0; i < len; i++) {
+        USART2_DR = data[i];
+        while (!(USART2_SR & (1 << 7))); /* Wait until TXE (Transmit Data Register Empty) */
     }
 }
